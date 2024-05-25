@@ -1,15 +1,15 @@
 package file_integrity
 
 import (
-	"fmt"
-	"magma_mgm/pkg/streebog"
+	"kdf_gostr/pkg/streebog"
+	"log"
 	"os"
 )
 
 func Integrity_check(inputPath string) []byte {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
-		fmt.Printf("ошибка при чтении файла %s: %v", inputPath, err)
+		log.Printf("Ошибка при чтении файла %s: %v", inputPath, err)
 		return nil
 	}
 

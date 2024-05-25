@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"fmt"
 	"log"
+	"magma_mgm/pkg/access_control"
 	"magma_mgm/pkg/file_integrity"
 	"magma_mgm/pkg/magma"
 	"magma_mgm/pkg/mgm"
@@ -25,7 +26,7 @@ func main() {
 	}
 
 	if len(os.Args) == 5 {
-		if os.Args[1] == "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" {
+		if access_control.CheckAccessControl(os.Args[1]) {
 			log.Println("Введен правильный пароль")
 			file_hash := file_integrity.Integrity_check(os.Args[0])
 			log.Println("Вычислен хеш исполняемого файла")
@@ -44,7 +45,7 @@ func main() {
 			} else {
 				log.Fatalf("Выбран некорректный режим работы программы")
 			}
-			if bytes.Compare(file_hash, file_integrity.Integrity_check(os.Args[0])) != 0 {
+			if !bytes.Equal(file_hash, file_integrity.Integrity_check(os.Args[0])) {
 				log.Fatalf("Нарушена целостность исполняемого файла")
 			} else {
 				log.Println("Целостность исполняемого файла нарушена не была")
@@ -53,7 +54,7 @@ func main() {
 			log.Fatalf("Введен неверный пароль")
 		}
 	} else if len(os.Args) == 3 {
-		if os.Args[1] == "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" {
+		if access_control.CheckAccessControl(os.Args[1]) {
 			log.Println("Введен правильный пароль")
 			if os.Args[2] == "-t" {
 				if test_encrypt(key) {
@@ -168,9 +169,5 @@ func test_encrypt(key []byte) bool {
 	var test_sealed []byte = []byte{0xc3, 0xce, 0xa9, 0xb4, 0x08, 0xce, 0x59, 0x76,
 		0xa8, 0x75, 0x36, 0x8f, 0x86, 0x65, 0x0a, 0x39,
 		0x03, 0x4d, 0x13, 0xc2, 0x44, 0x7a, 0x2a, 0x3f}
-	if bytes.Compare(test_sealed, sealed) != 0 {
-		return false
-	}
-
-	return true
+	return bytes.Equal(test_sealed, sealed)
 }
