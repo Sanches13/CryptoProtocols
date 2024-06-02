@@ -6,15 +6,15 @@ const (
 	SeedSize = 16
 )
 
-type XorShift128Plus struct {
+type XorShiftPlus struct {
 	seed [SeedSize]byte
 }
 
-func New(seed [SeedSize]byte) *XorShift128Plus {
-	return &XorShift128Plus{seed: seed}
+func New(seed [SeedSize]byte) *XorShiftPlus {
+	return &XorShiftPlus{seed: seed}
 }
 
-func (x *XorShift128Plus) Next() uint64 {
+func (x *XorShiftPlus) NextState() uint64 {
 	s1 := binary.BigEndian.Uint64(x.seed[0 : SeedSize/2])
 	s0 := binary.BigEndian.Uint64(x.seed[SeedSize/2:])
 

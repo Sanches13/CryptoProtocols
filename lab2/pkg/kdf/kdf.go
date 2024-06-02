@@ -22,7 +22,7 @@ func (kdf *KDF) Close() {
 	log.Println("Очищена память, хранящая ключевую информацию в структуре KDF")
 }
 
-func (kdf *KDF) Derive(label, seed []byte, r int) (res []byte) {
+func (kdf *KDF) Diversify(label, seed []byte, r int) (res []byte) {
 	if r < 0 || r > 4 {
 		log.Println("R should be between 1 and 4 inclusive")
 		panic("R should be between 1 and 4 inclusive")

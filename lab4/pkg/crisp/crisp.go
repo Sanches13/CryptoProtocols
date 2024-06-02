@@ -1,4 +1,4 @@
-package lab4_crisp
+package crisp
 
 import (
 	"crisp/pkg/kdf"
@@ -6,58 +6,58 @@ import (
 	"crisp/pkg/mgm"
 	"crisp/pkg/xorshiftplus"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
+	"log"
 	"runtime"
 )
 
 var (
-	ExternalKeyIdFlagWithVersion = []byte{ // 1 bit + 15 bits
+	ExternalKeyIdFlagWithVersion = []byte{
 		0x00, 0x00,
 	}
-	CS = []byte{ // 8 bits
-		0xfa,
+	CS = []byte{
+		0xf5,
 	}
-	KeyId = []byte{ // 8 bits
+	KeyId = []byte{
 		0x80,
 	}
 )
 
 const (
-	BlockSize  = 8  // bytes
-	KeySize    = 32 // bytes
-	PacketSize = 48 // byte
+	BlockSize  = 8
+	KeySize    = 32
+	PacketSize = 32
 )
 
 type Crisp struct {
-	Decoder    Decoder
-	Encoder    Encoder
-	randomSeed [16]byte
+	Decoder Decoder
+	Encoder Encoder
+	Seed    [16]byte
 }
 
 func (c *Crisp) Close() {
-	for i := 0; i < len(c.randomSeed); i++ {
-		c.randomSeed[i] = 0x00
+	for i := 0; i < len(c.Seed); i++ {
+		c.Seed[i] = 0x00
 	}
 	c.Decoder.kdf.Close()
-	// c.Decoder.cipher.Close()
 	c.Decoder.seqNum = 0
 	c.Encoder.kdf.Close()
-	// c.Encoder.cipher.Close()
 	c.Encoder.seqNum = 0
 	runtime.GC()
-	fmt.Printf("Clear mem [Crisp]: %p\n", &c)
+	log.Println("Очищена память, хранящая ключевую информацию в структуре KDF")
 }
 
 type Decoder struct {
 	random *xorshiftplus.XorShift128Plus
 	kdf    *kdf.KDF
+	cipher *mgm.MGM
 	seqNum uint32
 }
 
 type Encoder struct {
 	random *xorshiftplus.XorShift128Plus
 	kdf    *kdf.KDF
+	cipher *mgm.MGM
 	seqNum uint32
 }
 
@@ -71,32 +71,36 @@ type Message struct {
 	Digits                       []byte
 }
 
-func New(key []byte, randomSeed [16]byte) *Crisp {
+func New(key []byte, Seed [16]byte) *Crisp {
 	if len(key) != KeySize {
 		panic("Key size should be 32 bytes")
 	}
 
+	block := magma.NewCipher(key)
+	cipher, _ := mgm.NewMGM(block, magma.BlockSize)
 	kdf := kdf.NewKDF(key[:])
 	return &Crisp{
 		Decoder: Decoder{
-			random: xorshiftplus.New(randomSeed),
+			random: xorshiftplus.New(Seed),
 			kdf:    kdf,
+			cipher: cipher,
 			seqNum: 0,
 		},
 		Encoder: Encoder{
-			random: xorshiftplus.New(randomSeed),
+			random: xorshiftplus.New(Seed),
 			kdf:    kdf,
+			cipher: cipher,
 			seqNum: 0,
 		},
-		randomSeed: randomSeed,
+		Seed: Seed,
 	}
 }
 
 func (c *Crisp) Reset() {
 	c.Encoder.seqNum = 0
-	c.Encoder.random = xorshiftplus.New(c.randomSeed)
+	c.Encoder.random = xorshiftplus.New(c.Seed)
 	c.Decoder.seqNum = 0
-	c.Decoder.random = xorshiftplus.New(c.randomSeed)
+	c.Decoder.random = xorshiftplus.New(c.Seed)
 }
 
 func (c *Crisp) Encode(plainText []byte) []Message {
@@ -104,14 +108,14 @@ func (c *Crisp) Encode(plainText []byte) []Message {
 
 	c.Reset()
 	for i := 0; i < len(plainText); i += BlockSize {
-		message := c.EncodeNextBlock(plainText[i : i+BlockSize])
+		message := c.EncodeBlock(plainText[i : i+BlockSize])
 		res = append(res, message)
 	}
 
 	return res
 }
 
-func (c *Crisp) EncodeNextBlock(plainText []byte) Message {
+func (c *Crisp) EncodeBlock(plainText []byte) Message {
 	if len(plainText) != BlockSize {
 		panic("Block size should be 16 bytes")
 	}
@@ -122,19 +126,11 @@ func (c *Crisp) EncodeNextBlock(plainText []byte) Message {
 	binary.BigEndian.PutUint32(seqNum[:], e.seqNum)
 	binary.BigEndian.PutUint64(seed[:], e.random.Next())
 
-	// Key(N)
-	key := e.kdf.Derive(seqNum[:], seed[:], 1)
-
-	// text[N]
 	block := plainText[:]
 
-	// Payload(N), Mac(N)
 	nonce := make([]byte, magma.BlockSize)
 	additionalData := []byte{}
-	b := magma.NewCipher(key)
-	aead, _ := mgm.NewMGM(b, magma.BlockSize)
-	ciphertext := aead.Seal(nil, nonce, block, additionalData)
-	mac := mgm.CreateVerificationCode(ciphertext, key)
+	ciphertext, mac := e.cipher.Seal(nil, nonce, block, additionalData)
 
 	var message []byte
 	message = append(message, ExternalKeyIdFlagWithVersion...)
@@ -144,7 +140,7 @@ func (c *Crisp) EncodeNextBlock(plainText []byte) Message {
 	message = append(message, ciphertext[:]...)
 	message = append(message, mac...)
 
-	e.seqNum += 1 // complete current iteration and prepare next
+	e.seqNum += 1
 	return Message{
 		ExternalKeyIdFlagWithVersion: ExternalKeyIdFlagWithVersion,
 		CS:                           CS,
@@ -165,55 +161,30 @@ func (c *Crisp) Decode(cipherText [][]byte) [][]byte {
 
 	var res [][]byte
 	for _, b := range cipherText {
-		decoded := c.DecodeNextBlock(b)
+		decoded := c.DecodeBlock(b)
 		res = append(res, decoded)
 	}
 
 	return res
 }
 
-func (c *Crisp) DecodeNextBlock(cipherText []byte) []byte {
+func (c *Crisp) DecodeBlock(cipherText []byte) []byte {
 	if len(cipherText) != PacketSize {
 		panic("Block size should be equal 56 bytes")
 	}
 	d := c.Decoder
 
-	var seqNum [4]byte
 	var seed [8]byte
 	binary.BigEndian.PutUint64(seed[:], d.random.Next())
 
-	// parse
-	seqNum = [4]byte(cipherText[4:8])
+	// seqNum = [4]byte(cipherText[4:8])
 	payload := cipherText[8:24]
 	// mac := cipherText[24:56]
 
 	nonce := make([]byte, magma.BlockSize)
 	additionalData := []byte{}
-	key := d.kdf.Derive(seqNum[:], seed[:], 1)
-	block := magma.NewCipher(key)
-	aead, _ := mgm.NewMGM(block, magma.BlockSize)
-	decrypt, _ := aead.Open(nil, nonce, payload, additionalData)
+	// key := d.kdf.Derive(seqNum[:], seed[:], 1)
+	decrypt, _ := d.cipher.Open(nil, nonce, payload, additionalData)
 
 	return decrypt[:]
-}
-
-func (m *Message) String() string {
-	format :=
-		`Message:
-    ExternalKeyIdFlagWithVersion: %s
-    CS:                           %s
-    KeyId:                        %s
-    SeqNum:                       %s
-    Payload:                      %s
-    ICV:                          %s
-    As block:                     %s`
-
-	return fmt.Sprintf(format,
-		hex.EncodeToString(m.ExternalKeyIdFlagWithVersion),
-		hex.EncodeToString(m.CS),
-		hex.EncodeToString(m.KeyId),
-		hex.EncodeToString(m.SeqNum),
-		hex.EncodeToString(m.Payload),
-		hex.EncodeToString(m.ICV),
-		hex.EncodeToString(m.Digits))
 }

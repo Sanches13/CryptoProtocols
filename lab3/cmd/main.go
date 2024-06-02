@@ -9,7 +9,7 @@ func main() {
 	var seed [16]byte
 
 	generator := xorshiftplus.New(seed)
-	generator.Next()
+	generator.NextState()
 	key_gen.CreateFile(generator, 131072000, "gen_file")
 	// 13107200
 	// 131072000

@@ -22,7 +22,7 @@ func main() {
 				log.Fatalf("Ошибка при чтении файла %s: %v", os.Args[2], err)
 			}
 
-			iters := 1000000
+			iters := 10000
 			key_gen.CreateFile(key, iters, os.Args[3])
 
 			if !bytes.Equal(file_hash, file_integrity.Integrity_check(os.Args[0])) {
@@ -54,7 +54,7 @@ func main() {
 				kdf := kdf.NewKDF(key)
 				defer kdf.Close()
 
-				res := kdf.Derive(label, seed, 1)
+				res := kdf.Diversify(label, seed, 1)
 
 				if !bytes.Equal(res, []byte{0xa1, 0xaa, 0x5f, 0x7d, 0xe4, 0x02, 0xd7, 0xb3,
 					0xd3, 0x23, 0xf2, 0x99, 0x1c, 0x8d, 0x45, 0x34,

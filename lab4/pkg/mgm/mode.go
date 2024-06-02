@@ -197,7 +197,7 @@ func (mgm *MGM) crypt(out, in []byte) {
 	}
 }
 
-func (mgm *MGM) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
+func (mgm *MGM) Seal(dst, nonce, plaintext, additionalData []byte) ([]byte, []byte) {
 	mgm.validateNonce(nonce)
 	mgm.validateSizes(plaintext, additionalData)
 	if uint64(len(plaintext)) > mgm.maxSize {
@@ -211,7 +211,7 @@ func (mgm *MGM) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 		out[:len(plaintext)],
 		additionalData,
 	)
-	return ret
+	return ret, out
 }
 
 func (mgm *MGM) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
@@ -236,5 +236,5 @@ func CreateVerificationCode(ciphertext, key []byte) []byte {
 	mac.Write(ciphertext)
 	ciphertextMac := mac.Sum(nil)
 
-	return ciphertextMac[:24]
+	return ciphertextMac[:8]
 }

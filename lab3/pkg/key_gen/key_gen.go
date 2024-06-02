@@ -6,7 +6,7 @@ import (
 	"xorshiftplus/pkg/xorshiftplus"
 )
 
-func CreateFile(rand *xorshiftplus.XorShift128Plus, iters int, filename string) {
+func CreateFile(rand *xorshiftplus.XorShiftPlus, iters int, filename string) {
 
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
@@ -18,7 +18,7 @@ func CreateFile(rand *xorshiftplus.XorShift128Plus, iters int, filename string) 
 
 	for i := 0; i < iters; i++ {
 		var nextBatch [8]byte
-		value := rand.Next()
+		value := rand.NextState()
 		binary.LittleEndian.PutUint64(nextBatch[:], value)
 
 		_, err := file.Write(nextBatch[:])
