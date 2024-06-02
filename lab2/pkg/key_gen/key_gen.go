@@ -27,7 +27,7 @@ func CreateFile(key []byte, iters int, filename string) {
 		var seq [8]byte
 		binary.LittleEndian.PutUint64(seq[:], uint64(i))
 
-		nextKey := kdf.Derive(label, seq[:], 1)
+		nextKey := kdf.Diversify(label, seq[:], 1)
 
 		_, err := file.Write(nextKey[:])
 		if err != nil {

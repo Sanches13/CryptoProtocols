@@ -26,7 +26,7 @@ var (
 const (
 	BlockSize  = 8
 	KeySize    = 32
-	PacketSize = 32
+	PacketSize = 40
 )
 
 type Crisp struct {
@@ -76,9 +76,16 @@ func New(key []byte, Seed [16]byte) *Crisp {
 		panic("Key size should be 32 bytes")
 	}
 
-	block := magma.NewCipher(key)
-	cipher, _ := mgm.NewMGM(block, magma.BlockSize)
+	label := []byte{
+		0x26, 0xbd, 0xb8, 0x78,
+	}
+	seed := []byte{
+		0xaf, 0x21, 0x43, 0x41, 0x45, 0x65, 0x63, 0x78,
+	}
 	kdf := kdf.NewKDF(key[:])
+	new_key := kdf.Diversify(label, seed, 1)
+	block := magma.NewCipher(new_key)
+	cipher, _ := mgm.NewMGM(block, magma.BlockSize)
 	return &Crisp{
 		Decoder: Decoder{
 			random: xorshiftplus.New(Seed),
@@ -183,7 +190,6 @@ func (c *Crisp) DecodeBlock(cipherText []byte) []byte {
 
 	nonce := make([]byte, magma.BlockSize)
 	additionalData := []byte{}
-	// key := d.kdf.Derive(seqNum[:], seed[:], 1)
 	decrypt, _ := d.cipher.Open(nil, nonce, payload, additionalData)
 
 	return decrypt[:]
